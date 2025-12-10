@@ -20,6 +20,7 @@ fn main() {
         WindowBuilder::new()
             .with_title("BioSpheres")
             .with_inner_size(winit::dpi::LogicalSize::new(1280, 720))
+            .with_maximized(true)
             .build(&event_loop)
             .unwrap()
     );
