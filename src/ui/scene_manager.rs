@@ -343,5 +343,65 @@ pub fn render_scene_manager_content(
     
     ui.separator();
     
+    // Exit confirmation modal (same as in window function)
+    if scene_manager_state.show_exit_confirmation {
+        // Get display size to center the dialog
+        let display_size = ui.io().display_size;
+        let center_x = display_size[0] * 0.5;
+        let center_y = display_size[1] * 0.5;
+        
+        let mut exit_confirmed = false;
+        
+        ui.window("Exit Confirmation")
+            .position([center_x, center_y], Condition::Always)
+            .position_pivot([0.5, 0.5])
+            .size([300.0, 120.0], Condition::Always)
+            .collapsible(false)
+            .resizable(false)
+            .flags(WindowFlags::NO_MOVE | WindowFlags::NO_COLLAPSE)
+            .build(|| {
+                ui.text("Are you sure you want to exit?");
+                ui.spacing();
+                ui.separator();
+                ui.spacing();
+                
+                // Center the buttons
+                let button_width = 120.0;
+                let spacing = 10.0;
+                let total_width = button_width * 2.0 + spacing;
+                let window_width = 300.0;
+                let offset = (window_width - total_width) * 0.5;
+                
+                ui.set_cursor_pos([offset, ui.cursor_pos()[1]]);
+                
+                // Yes button (red)
+                let red = [0.8, 0.2, 0.2, 1.0];
+                let red_hovered = [1.0, 0.3, 0.3, 1.0];
+                let red_active = [0.6, 0.1, 0.1, 1.0];
+                
+                let _button_color = ui.push_style_color(StyleColor::Button, red);
+                let _button_hovered = ui.push_style_color(StyleColor::ButtonHovered, red_hovered);
+                let _button_active = ui.push_style_color(StyleColor::ButtonActive, red_active);
+                
+                if ui.button_with_size("Yes", [button_width, 0.0]) {
+                    // Handle exit - close dialog and request exit
+                    scene_manager_state.show_exit_confirmation = false;
+                    println!("Exit confirmed from scene manager dialog");
+                    exit_confirmed = true;
+                }
+                
+                ui.same_line();
+                
+                // No button (default style)
+                if ui.button_with_size("No", [button_width, 0.0]) {
+                    scene_manager_state.show_exit_confirmation = false;
+                }
+            });
+            
+        if exit_confirmed {
+            return true;
+        }
+    }
+    
     false // No exit requested
 }
