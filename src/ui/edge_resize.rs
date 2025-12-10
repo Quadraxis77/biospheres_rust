@@ -195,6 +195,7 @@ pub struct EdgeResizableWindow<'a> {
     size: [f32; 2],
     position: [f32; 2],
     flags: WindowFlags,
+    #[allow(dead_code)]
     resize_state: &'a mut EdgeResizeState,
     border_size: f32,
     min_size: [f32; 2],

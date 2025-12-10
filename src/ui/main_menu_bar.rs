@@ -3,12 +3,14 @@ use crate::simulation::SimulationState;
 use imgui::Ui;
 
 /// Render the main menu bar at the top of the screen
+/// Returns true if manual save was requested
 pub fn render_main_menu_bar(
     ui: &Ui,
     global_ui_state: &mut GlobalUiState,
     _simulation_state: &mut SimulationState,
     theme_state: &mut ImguiThemeState,
-) {
+) -> bool {
+    let mut manual_save_requested = false;
     if let Some(_menu_bar) = ui.begin_main_menu_bar() {
         // File menu
         if let Some(_menu) = ui.begin_menu("File") {
@@ -145,6 +147,16 @@ pub fn render_main_menu_bar(
             
             ui.separator();
 
+            // Manual save settings option
+            if ui.menu_item("Save Settings Now") {
+                manual_save_requested = true;
+            }
+            if ui.is_item_hovered() {
+                ui.tooltip_text("Manually save current UI and theme settings");
+            }
+
+            ui.separator();
+
             // Show lock status
             let status = if global_ui_state.windows_locked {
                 "Windows: LOCKED"
@@ -222,4 +234,6 @@ pub fn render_main_menu_bar(
         ui.set_cursor_pos([window_width - text_width - padding, ui.cursor_pos()[1]]);
         ui.text(version_text);
     }
+    
+    manual_save_requested
 }

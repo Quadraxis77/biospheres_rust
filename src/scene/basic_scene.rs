@@ -66,6 +66,10 @@ pub struct BasicScene {
     
     // Timing
     last_frame_time: Instant,
+    
+    // Settings persistence
+    previous_ui_state: GlobalUiState,
+    previous_theme_state: ImguiThemeState,
 }
 
 impl BasicScene {
@@ -143,8 +147,14 @@ impl BasicScene {
         // Ensure default imgui.ini layout is created
         crate::ui::imgui_panel::ensure_default_imgui_ini();
         
-        // Initialize UI state
-        let global_ui_state = GlobalUiState::default();
+        // Initialize UI state - load from files if they exist
+        let global_ui_state = GlobalUiState::load_from_file(&GlobalUiState::default_settings_path());
+        let imgui_theme_state = ImguiThemeState::load_from_file(&ImguiThemeState::default_theme_path());
+        
+        // Clone for tracking changes
+        let previous_ui_state = global_ui_state.clone();
+        let previous_theme_state = imgui_theme_state.clone();
+        
         let scene_manager_state = SceneManagerState::default();
         let time_scrubber_state = TimeScrubberState::default();
         let performance_monitor = PerformanceMonitor::default();
@@ -174,7 +184,7 @@ impl BasicScene {
             theme_editor_state,
             camera_settings_state,
             lighting_settings_state,
-            imgui_theme_state: ImguiThemeState::default(),
+            imgui_theme_state,
             cell_inspector_resize: EdgeResizeState::default(),
             genome_editor_resize: EdgeResizeState::default(),
             camera_settings_resize: EdgeResizeState::default(),
@@ -187,6 +197,8 @@ impl BasicScene {
             pending_cursor: None,
             cursor_priority: 0,
             last_frame_time: Instant::now(),
+            previous_ui_state,
+            previous_theme_state,
         }
     }
     
@@ -262,7 +274,7 @@ impl BasicScene {
         }
         
         // Prepare ImGui frame and render UI windows
-        let cursor_requests = {
+        let (cursor_requests, manual_save_requested) = {
             let ui = self.imgui_manager.prepare_frame(window);
             
             // Collect cursor requests from all windows
@@ -276,7 +288,7 @@ impl BasicScene {
             apply_imgui_style(ui, &mut self.imgui_theme_state, self.global_ui_state.ui_scale);
             
             // Render main menu bar at the top
-            render_main_menu_bar(ui, &mut self.global_ui_state, &mut self.simulation_state, &mut self.imgui_theme_state);
+            let manual_save_requested = render_main_menu_bar(ui, &mut self.global_ui_state, &mut self.simulation_state, &mut self.imgui_theme_state);
             
             // Render all UI windows inline to avoid borrow checker issues
             // Scene Manager
@@ -475,8 +487,14 @@ impl BasicScene {
                 }
             }
             
-            cursor_requests
+            (cursor_requests, manual_save_requested)
         };
+        
+        // Handle manual save request
+        if manual_save_requested {
+            self.save_settings();
+            println!("Settings saved manually");
+        }
         
         // Process cursor requests with priority
         // Reset cursor state each frame to start fresh
@@ -498,6 +516,9 @@ impl BasicScene {
         if let Err(e) = self.imgui_manager.render(&self.device, &self.queue, &mut encoder, &view) {
             eprintln!("ImGui render error: {:?}", e);
         }
+        
+        // Check for settings changes and save if needed
+        self.check_and_save_settings();
         
         Ok((output, view, encoder))
     }
@@ -545,6 +566,48 @@ impl BasicScene {
                 _ => winit::window::CursorIcon::Default,
             }
         })
+    }
+
+    /// Save UI settings to files
+    pub fn save_settings(&self) {
+        // Save UI state
+        if let Err(e) = self.global_ui_state.save_to_file(&GlobalUiState::default_settings_path()) {
+            eprintln!("Failed to save UI settings: {}", e);
+        }
+
+        // Save theme settings
+        if let Err(e) = self.imgui_theme_state.save_to_file(&ImguiThemeState::default_theme_path()) {
+            eprintln!("Failed to save theme settings: {}", e);
+        }
+    }
+
+    /// Check if settings have changed and save them if so
+    fn check_and_save_settings(&mut self) {
+        let mut settings_changed = false;
+
+        // Check if UI state changed
+        if self.global_ui_state != self.previous_ui_state {
+            if let Err(e) = self.global_ui_state.save_to_file(&GlobalUiState::default_settings_path()) {
+                eprintln!("Failed to save UI settings: {}", e);
+            } else {
+                self.previous_ui_state = self.global_ui_state.clone();
+                settings_changed = true;
+            }
+        }
+
+        // Check if theme state changed
+        if self.imgui_theme_state.current_theme != self.previous_theme_state.current_theme {
+            if let Err(e) = self.imgui_theme_state.save_to_file(&ImguiThemeState::default_theme_path()) {
+                eprintln!("Failed to save theme settings: {}", e);
+            } else {
+                self.previous_theme_state = self.imgui_theme_state.clone();
+                settings_changed = true;
+            }
+        }
+
+        if settings_changed {
+            println!("Settings saved automatically");
+        }
     }
     
 

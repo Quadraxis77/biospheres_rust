@@ -20,6 +20,7 @@ pub mod time_scrubber;
 pub mod edge_resize;
 
 /// Global UI state shared across all UI components
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct GlobalUiState {
     pub windows_locked: bool,
     pub ui_scale: f32,
@@ -50,5 +51,38 @@ impl Default for GlobalUiState {
             show_camera_settings: true,
             show_lighting_settings: true,
         }
+    }
+}
+
+impl GlobalUiState {
+    /// Save settings to file
+    pub fn save_to_file(&self, path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+        let json = serde_json::to_string_pretty(self)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    /// Load settings from file, falling back to default if file doesn't exist or is invalid
+    pub fn load_from_file(path: &std::path::Path) -> Self {
+        match std::fs::read_to_string(path) {
+            Ok(json) => {
+                match serde_json::from_str(&json) {
+                    Ok(settings) => settings,
+                    Err(e) => {
+                        eprintln!("Failed to parse settings file: {}. Using defaults.", e);
+                        Self::default()
+                    }
+                }
+            }
+            Err(_) => {
+                // File doesn't exist or can't be read, use defaults
+                Self::default()
+            }
+        }
+    }
+
+    /// Get the default settings file path
+    pub fn default_settings_path() -> std::path::PathBuf {
+        std::path::PathBuf::from("ui_settings.json")
     }
 }

@@ -1,0 +1,13 @@
+{
+  "windows_locked": false,
+  "ui_scale": 1.25,
+  "show_cell_inspector": true,
+  "show_genome_editor": false,
+  "show_scene_manager": true,
+  "show_performance_monitor": false,
+  "show_rendering_controls": true,
+  "show_time_scrubber": true,
+  "show_theme_editor": false,
+  "show_camera_settings": true,
+  "show_lighting_settings": false
+}

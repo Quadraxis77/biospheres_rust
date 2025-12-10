@@ -1,4 +1,4 @@
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum ImguiTheme {
     ModernDark,
     Industrial,
@@ -21,8 +21,10 @@ impl ImguiTheme {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct ImguiThemeState {
     pub current_theme: ImguiTheme,
+    #[serde(skip)]
     pub theme_changed: bool,
 }
 
@@ -32,6 +34,42 @@ impl Default for ImguiThemeState {
             current_theme: ImguiTheme::ModernDark,
             theme_changed: true, // Apply theme on first frame
         }
+    }
+}
+
+impl ImguiThemeState {
+    /// Save theme settings to file
+    pub fn save_to_file(&self, path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+        let json = serde_json::to_string_pretty(self)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    /// Load theme settings from file, falling back to default if file doesn't exist or is invalid
+    pub fn load_from_file(path: &std::path::Path) -> Self {
+        match std::fs::read_to_string(path) {
+            Ok(json) => {
+                match serde_json::from_str::<Self>(&json) {
+                    Ok(mut theme_state) => {
+                        theme_state.theme_changed = true; // Apply theme on load
+                        theme_state
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to parse theme settings file: {}. Using defaults.", e);
+                        Self::default()
+                    }
+                }
+            }
+            Err(_) => {
+                // File doesn't exist or can't be read, use defaults
+                Self::default()
+            }
+        }
+    }
+
+    /// Get the default theme settings file path
+    pub fn default_theme_path() -> std::path::PathBuf {
+        std::path::PathBuf::from("theme_settings.json")
     }
 }
 
