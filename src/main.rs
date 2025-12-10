@@ -1,95 +1,82 @@
 use biospheres::scene::BasicScene;
 use std::sync::Arc;
 use winit::{
-    application::ApplicationHandler,
     event::*,
-    event_loop::{ActiveEventLoop, EventLoop},
-    window::{Window, WindowId},
+    event_loop::EventLoop,
+    window::{Window, WindowBuilder},
 };
 
 struct App {
-    window: Option<Arc<Window>>,
-    scene: Option<BasicScene>,
-}
-
-impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_none() {
-            let window = Arc::new(
-                event_loop
-                    .create_window(
-                        Window::default_attributes()
-                            .with_title("BioSpheres")
-                            .with_inner_size(winit::dpi::LogicalSize::new(1280, 720))
-                    )
-                    .unwrap()
-            );
-            
-            // Create basic scene
-            let scene = pollster::block_on(BasicScene::new(window.clone()));
-            
-            println!("Scene initialized successfully");
-            
-            self.window = Some(window);
-            self.scene = Some(scene);
-        }
-    }
-
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        _window_id: WindowId,
-        event: WindowEvent,
-    ) {
-        match event {
-            WindowEvent::CloseRequested => {
-                println!("Close requested, exiting...");
-                event_loop.exit();
-            }
-            WindowEvent::Resized(physical_size) => {
-                if let Some(scene) = &mut self.scene {
-                    scene.resize(physical_size);
-                }
-            }
-            WindowEvent::RedrawRequested => {
-                if let (Some(window), Some(scene)) = (&self.window, &mut self.scene) {
-                    // Render the scene
-                    match scene.render() {
-                        Ok((output, _view, encoder)) => {
-                            scene.present(output, encoder);
-                        }
-                        Err(wgpu::SurfaceError::Lost) => {
-                            scene.resize(window.inner_size());
-                        }
-                        Err(wgpu::SurfaceError::OutOfMemory) => {
-                            eprintln!("Out of memory!");
-                            event_loop.exit();
-                        }
-                        Err(e) => {
-                            eprintln!("Surface error: {:?}", e);
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if let Some(window) = &self.window {
-            window.request_redraw();
-        }
-    }
+    window: Arc<Window>,
+    scene: BasicScene,
 }
 
 fn main() {
     println!("BioSpheres starting...");
     
     let event_loop = EventLoop::new().unwrap();
-    let mut app = App {
-        window: None,
-        scene: None,
-    };
     
-    event_loop.run_app(&mut app).unwrap();
+    let window = Arc::new(
+        WindowBuilder::new()
+            .with_title("BioSpheres")
+            .with_inner_size(winit::dpi::LogicalSize::new(1280, 720))
+            .build(&event_loop)
+            .unwrap()
+    );
+    
+    // Create basic scene
+    let scene = pollster::block_on(BasicScene::new(window.clone()));
+    println!("Scene initialized successfully");
+    
+    let mut app = App { window, scene };
+    
+    event_loop.run(move |event, elwt| {
+        match event {
+            Event::WindowEvent { event, .. } => {
+                // Let the scene handle input first
+                if app.scene.handle_input(&event) {
+                    // ImGui consumed the event, request redraw
+                    app.window.request_redraw();
+                }
+                
+                match event {
+                    WindowEvent::CloseRequested => {
+                        println!("Close requested, exiting...");
+                        elwt.exit();
+                    }
+                    WindowEvent::Resized(physical_size) => {
+                        app.scene.resize(physical_size);
+                    }
+                    WindowEvent::RedrawRequested => {
+                        // Render the scene with UI
+                        match app.scene.render(&app.window) {
+                            Ok((output, _view, encoder)) => {
+                                app.scene.present(output, encoder);
+                                
+                                // Update cursor based on scene's desired cursor
+                                let desired_cursor = app.scene.get_desired_cursor()
+                                    .unwrap_or(winit::window::CursorIcon::Default);
+                                app.window.set_cursor_icon(desired_cursor);
+                            }
+                            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                                app.scene.resize(app.window.inner_size());
+                            }
+                            Err(wgpu::SurfaceError::OutOfMemory) => {
+                                eprintln!("Out of memory!");
+                                elwt.exit();
+                            }
+                            Err(e) => {
+                                eprintln!("Surface error: {:?}", e);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Event::AboutToWait => {
+                app.window.request_redraw();
+            }
+            _ => {}
+        }
+    }).unwrap();
 }
