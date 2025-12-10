@@ -3,14 +3,15 @@ use crate::simulation::SimulationState;
 use imgui::Ui;
 
 /// Render the main menu bar at the top of the screen
-/// Returns true if manual save was requested
+/// Returns (manual_save_requested, exit_requested)
 pub fn render_main_menu_bar(
     ui: &Ui,
     global_ui_state: &mut GlobalUiState,
     _simulation_state: &mut SimulationState,
     theme_state: &mut ImguiThemeState,
-) -> bool {
+) -> (bool, bool) {
     let mut manual_save_requested = false;
+    let mut exit_requested = false;
     if let Some(_menu_bar) = ui.begin_main_menu_bar() {
         // File menu
         if let Some(_menu) = ui.begin_menu("File") {
@@ -49,8 +50,11 @@ pub fn render_main_menu_bar(
             ui.separator();
             
             if ui.menu_item("Exit") {
-                println!("Exit requested");
-                // TODO: Implement proper exit handling
+                println!("Exit requested from menu");
+                exit_requested = true;
+            }
+            if ui.is_item_hovered() {
+                ui.tooltip_text("Exit the application");
             }
         }
         
@@ -235,5 +239,5 @@ pub fn render_main_menu_bar(
         ui.text(version_text);
     }
     
-    manual_save_requested
+    (manual_save_requested, exit_requested)
 }

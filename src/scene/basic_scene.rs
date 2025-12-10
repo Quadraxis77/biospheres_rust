@@ -232,7 +232,8 @@ impl BasicScene {
     }
     
     /// Render the scene with ImGui UI
-    pub fn render(&mut self, window: &Window) -> Result<(wgpu::SurfaceTexture, wgpu::TextureView, wgpu::CommandEncoder), wgpu::SurfaceError> {
+    /// Returns (surface_texture, texture_view, command_encoder, exit_requested)
+    pub fn render(&mut self, window: &Window) -> Result<(wgpu::SurfaceTexture, wgpu::TextureView, wgpu::CommandEncoder, bool), wgpu::SurfaceError> {
         // Update timing
         let now = Instant::now();
         let delta_time = now.duration_since(self.last_frame_time).as_secs_f32();
@@ -274,7 +275,7 @@ impl BasicScene {
         }
         
         // Prepare ImGui frame and render UI windows
-        let (cursor_requests, manual_save_requested) = {
+        let (cursor_requests, manual_save_requested, exit_requested) = {
             let ui = self.imgui_manager.prepare_frame(window);
             
             // Collect cursor requests from all windows
@@ -288,18 +289,20 @@ impl BasicScene {
             apply_imgui_style(ui, &mut self.imgui_theme_state, self.global_ui_state.ui_scale);
             
             // Render main menu bar at the top
-            let manual_save_requested = render_main_menu_bar(ui, &mut self.global_ui_state, &mut self.simulation_state, &mut self.imgui_theme_state);
+            let (manual_save_requested, mut exit_requested) = render_main_menu_bar(ui, &mut self.global_ui_state, &mut self.simulation_state, &mut self.imgui_theme_state);
             
             // Render all UI windows inline to avoid borrow checker issues
             // Scene Manager
             if self.global_ui_state.show_scene_manager {
                 if self.global_ui_state.windows_locked {
-                    render_scene_manager_window(
+                    if render_scene_manager_window(
                         ui,
                         &mut self.scene_manager_state,
                         &mut self.simulation_state,
                         &self.global_ui_state,
-                    );
+                    ) {
+                        exit_requested = true;
+                    }
                 } else {
                     let mut cursor_to_set = None;
                     EdgeResizableWindow::new("Scene Manager", &mut self.scene_manager_resize)
@@ -308,7 +311,9 @@ impl BasicScene {
                         .border_size(6.0)
                         .min_size([250.0, 150.0])
                         .build(ui, |cursor| cursor_to_set = cursor, || {
-                            render_scene_manager_content(ui, &mut self.scene_manager_state, &mut self.simulation_state);
+                            if render_scene_manager_content(ui, &mut self.scene_manager_state, &mut self.simulation_state) {
+                                exit_requested = true;
+                            }
                         });
                     cursor_requests.push((cursor_to_set, 10));
                 }
@@ -487,7 +492,7 @@ impl BasicScene {
                 }
             }
             
-            (cursor_requests, manual_save_requested)
+            (cursor_requests, manual_save_requested, exit_requested)
         };
         
         // Handle manual save request
@@ -520,7 +525,7 @@ impl BasicScene {
         // Check for settings changes and save if needed
         self.check_and_save_settings();
         
-        Ok((output, view, encoder))
+        Ok((output, view, encoder, exit_requested))
     }
 
     

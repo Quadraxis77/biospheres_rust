@@ -43,20 +43,21 @@ impl Default for PendingGridDensity {
 }
 
 /// Main Scene Manager window rendering function
+/// Returns true if exit was requested
 pub fn render_scene_manager_window(
     ui: &imgui::Ui,
     scene_manager_state: &mut SceneManagerState,
     simulation_state: &mut SimulationState,
     global_ui_state: &super::GlobalUiState,
-) {
+) -> bool {
     // Only render if window is open
     if !scene_manager_state.window_open {
-        return;
+        return false;
     }
 
     // Only show if visibility is enabled
     if !global_ui_state.show_scene_manager {
-        return;
+        return false;
     }
 
     // Build flags based on lock state
@@ -180,6 +181,8 @@ pub fn render_scene_manager_window(
         let center_x = display_size[0] * 0.5;
         let center_y = display_size[1] * 0.5;
         
+        let mut exit_confirmed = false;
+        
         ui.window("Exit Confirmation")
             .position([center_x, center_y], Condition::Always)
             .position_pivot([0.5, 0.5])
@@ -212,8 +215,10 @@ pub fn render_scene_manager_window(
                 let _button_active = ui.push_style_color(StyleColor::ButtonActive, red_active);
                 
                 if ui.button_with_size("Yes", [button_width, 0.0]) {
-                    // Handle exit
+                    // Handle exit - close dialog and request exit
                     scene_manager_state.show_exit_confirmation = false;
+                    println!("Exit confirmed from scene manager dialog");
+                    exit_confirmed = true;
                 }
                 
                 ui.same_line();
@@ -223,15 +228,22 @@ pub fn render_scene_manager_window(
                     scene_manager_state.show_exit_confirmation = false;
                 }
             });
+            
+        if exit_confirmed {
+            return true;
+        }
     }
+    
+    false // No exit requested
 }
 
 /// Render just the content of the Scene Manager window (without the window wrapper)
+/// Returns true if exit was requested
 pub fn render_scene_manager_content(
     ui: &imgui::Ui,
     scene_manager_state: &mut SceneManagerState,
     simulation_state: &mut SimulationState,
-) {
+) -> bool {
     // Exit button at the top in red
     let red = [0.8, 0.2, 0.2, 1.0];
     let red_hovered = [1.0, 0.3, 0.3, 1.0];
@@ -330,4 +342,6 @@ pub fn render_scene_manager_content(
     }
     
     ui.separator();
+    
+    false // No exit requested
 }

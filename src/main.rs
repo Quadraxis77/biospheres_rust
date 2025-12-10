@@ -50,8 +50,15 @@ fn main() {
                     WindowEvent::RedrawRequested => {
                         // Render the scene with UI
                         match app.scene.render(&app.window) {
-                            Ok((output, _view, encoder)) => {
+                            Ok((output, _view, encoder, exit_requested)) => {
                                 app.scene.present(output, encoder);
+                                
+                                // Handle exit request from UI
+                                if exit_requested {
+                                    println!("Exit requested from UI, closing application...");
+                                    elwt.exit();
+                                    return;
+                                }
                                 
                                 // Update cursor based on scene's desired cursor
                                 let desired_cursor = app.scene.get_desired_cursor()
