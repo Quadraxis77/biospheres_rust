@@ -9,6 +9,7 @@ pub mod imgui_style;
 pub mod imgui_widgets;
 pub mod imnodes_extensions;
 pub mod lighting_settings;
+pub mod main_menu_bar;
 pub mod performance_monitor;
 pub mod rendering_controls;
 pub mod scene_manager;

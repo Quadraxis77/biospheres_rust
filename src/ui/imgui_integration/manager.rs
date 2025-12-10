@@ -2,6 +2,93 @@ use super::{ImguiConfig, ImguiError, TextureHandle};
 use super::texture_registry::TextureRegistry;
 use std::time::Instant;
 
+/// Convert winit physical key to ImGui key
+fn winit_key_to_imgui_key(key: &winit::keyboard::PhysicalKey) -> Option<imgui::Key> {
+    use winit::keyboard::PhysicalKey;
+    
+    match key {
+        PhysicalKey::Code(code) => {
+            use winit::keyboard::KeyCode;
+            match code {
+                KeyCode::Tab => Some(imgui::Key::Tab),
+                KeyCode::ArrowLeft => Some(imgui::Key::LeftArrow),
+                KeyCode::ArrowRight => Some(imgui::Key::RightArrow),
+                KeyCode::ArrowUp => Some(imgui::Key::UpArrow),
+                KeyCode::ArrowDown => Some(imgui::Key::DownArrow),
+                KeyCode::PageUp => Some(imgui::Key::PageUp),
+                KeyCode::PageDown => Some(imgui::Key::PageDown),
+                KeyCode::Home => Some(imgui::Key::Home),
+                KeyCode::End => Some(imgui::Key::End),
+                KeyCode::Insert => Some(imgui::Key::Insert),
+                KeyCode::Delete => Some(imgui::Key::Delete),
+                KeyCode::Backspace => Some(imgui::Key::Backspace),
+                KeyCode::Space => Some(imgui::Key::Space),
+                KeyCode::Enter => Some(imgui::Key::Enter),
+                KeyCode::Escape => Some(imgui::Key::Escape),
+                KeyCode::ControlLeft => Some(imgui::Key::LeftCtrl),
+                KeyCode::ControlRight => Some(imgui::Key::RightCtrl),
+                KeyCode::ShiftLeft => Some(imgui::Key::LeftShift),
+                KeyCode::ShiftRight => Some(imgui::Key::RightShift),
+                KeyCode::AltLeft => Some(imgui::Key::LeftAlt),
+                KeyCode::AltRight => Some(imgui::Key::RightAlt),
+                KeyCode::SuperLeft => Some(imgui::Key::LeftSuper),
+                KeyCode::SuperRight => Some(imgui::Key::RightSuper),
+                KeyCode::ContextMenu => Some(imgui::Key::Menu),
+                KeyCode::Digit0 => Some(imgui::Key::Keypad0),
+                KeyCode::Digit1 => Some(imgui::Key::Keypad1),
+                KeyCode::Digit2 => Some(imgui::Key::Keypad2),
+                KeyCode::Digit3 => Some(imgui::Key::Keypad3),
+                KeyCode::Digit4 => Some(imgui::Key::Keypad4),
+                KeyCode::Digit5 => Some(imgui::Key::Keypad5),
+                KeyCode::Digit6 => Some(imgui::Key::Keypad6),
+                KeyCode::Digit7 => Some(imgui::Key::Keypad7),
+                KeyCode::Digit8 => Some(imgui::Key::Keypad8),
+                KeyCode::Digit9 => Some(imgui::Key::Keypad9),
+                KeyCode::KeyA => Some(imgui::Key::A),
+                KeyCode::KeyB => Some(imgui::Key::B),
+                KeyCode::KeyC => Some(imgui::Key::C),
+                KeyCode::KeyD => Some(imgui::Key::D),
+                KeyCode::KeyE => Some(imgui::Key::E),
+                KeyCode::KeyF => Some(imgui::Key::F),
+                KeyCode::KeyG => Some(imgui::Key::G),
+                KeyCode::KeyH => Some(imgui::Key::H),
+                KeyCode::KeyI => Some(imgui::Key::I),
+                KeyCode::KeyJ => Some(imgui::Key::J),
+                KeyCode::KeyK => Some(imgui::Key::K),
+                KeyCode::KeyL => Some(imgui::Key::L),
+                KeyCode::KeyM => Some(imgui::Key::M),
+                KeyCode::KeyN => Some(imgui::Key::N),
+                KeyCode::KeyO => Some(imgui::Key::O),
+                KeyCode::KeyP => Some(imgui::Key::P),
+                KeyCode::KeyQ => Some(imgui::Key::Q),
+                KeyCode::KeyR => Some(imgui::Key::R),
+                KeyCode::KeyS => Some(imgui::Key::S),
+                KeyCode::KeyT => Some(imgui::Key::T),
+                KeyCode::KeyU => Some(imgui::Key::U),
+                KeyCode::KeyV => Some(imgui::Key::V),
+                KeyCode::KeyW => Some(imgui::Key::W),
+                KeyCode::KeyX => Some(imgui::Key::X),
+                KeyCode::KeyY => Some(imgui::Key::Y),
+                KeyCode::KeyZ => Some(imgui::Key::Z),
+                KeyCode::F1 => Some(imgui::Key::F1),
+                KeyCode::F2 => Some(imgui::Key::F2),
+                KeyCode::F3 => Some(imgui::Key::F3),
+                KeyCode::F4 => Some(imgui::Key::F4),
+                KeyCode::F5 => Some(imgui::Key::F5),
+                KeyCode::F6 => Some(imgui::Key::F6),
+                KeyCode::F7 => Some(imgui::Key::F7),
+                KeyCode::F8 => Some(imgui::Key::F8),
+                KeyCode::F9 => Some(imgui::Key::F9),
+                KeyCode::F10 => Some(imgui::Key::F10),
+                KeyCode::F11 => Some(imgui::Key::F11),
+                KeyCode::F12 => Some(imgui::Key::F12),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
 /// Manages the ImGui context and rendering lifecycle
 pub struct ImguiManager {
     context: imgui::Context,
@@ -52,6 +139,13 @@ impl ImguiManager {
         // Additional configuration to improve edge resize detection
         io.config_input_text_cursor_blink = true;
         io.config_input_text_enter_keep_active = true;
+        
+        // Configure mouse wheel scrolling behavior
+        io.config_input_text_cursor_blink = true;
+        io.config_input_text_enter_keep_active = true;
+        
+        // Mouse wheel scrolling is enabled by default in ImGui
+        // Additional scrolling improvements will be handled in event processing
         
         println!("ImGui docking and window resizing enabled successfully");
         println!("Edge resizing enabled: {}", io.config_windows_resize_from_edges);
@@ -313,6 +407,58 @@ impl ImguiManager {
                     winit::event::MouseButton::Middle => io.add_mouse_button_event(imgui::MouseButton::Middle, pressed),
                     _ => {}
                 }
+                true
+            }
+            winit::event::WindowEvent::MouseWheel { delta, .. } => {
+                match delta {
+                    winit::event::MouseScrollDelta::LineDelta(x, y) => {
+                        // Direct line delta - use as-is for smooth scrolling
+                        io.add_mouse_wheel_event([*x, *y]);
+                    }
+                    winit::event::MouseScrollDelta::PixelDelta(pos) => {
+                        // Convert pixel delta to line delta
+                        // Use a smaller divisor for more responsive scrolling
+                        let line_delta_x = pos.x as f32 / 53.0; // Typical line height
+                        let line_delta_y = pos.y as f32 / 53.0;
+                        io.add_mouse_wheel_event([line_delta_x, line_delta_y]);
+                    }
+                }
+                true
+            }
+            winit::event::WindowEvent::KeyboardInput { event, .. } => {
+                let pressed = event.state == winit::event::ElementState::Pressed;
+                
+                // Handle modifier keys
+                io.add_key_event(imgui::Key::ModCtrl, io.key_ctrl);
+                io.add_key_event(imgui::Key::ModShift, io.key_shift);
+                io.add_key_event(imgui::Key::ModAlt, io.key_alt);
+                io.add_key_event(imgui::Key::ModSuper, io.key_super);
+                
+                // Handle specific keys that ImGui cares about
+                if let Some(key) = winit_key_to_imgui_key(&event.physical_key) {
+                    io.add_key_event(key, pressed);
+                }
+                
+                // Handle text input for printable characters
+                if pressed {
+                    if let Some(text) = &event.text {
+                        for ch in text.chars() {
+                            if !ch.is_control() {
+                                io.add_input_character(ch);
+                            }
+                        }
+                    }
+                }
+                
+                true
+            }
+            // Note: Text input is now handled through the keyboard input event
+            // with the logical key and text information
+            winit::event::WindowEvent::ModifiersChanged(modifiers) => {
+                io.key_shift = modifiers.state().shift_key();
+                io.key_ctrl = modifiers.state().control_key();
+                io.key_alt = modifiers.state().alt_key();
+                io.key_super = modifiers.state().super_key();
                 true
             }
             _ => false,

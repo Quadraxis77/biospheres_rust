@@ -9,9 +9,17 @@ use crate::ui::{
     time_scrubber::{TimeScrubberState, render_time_scrubber, render_time_scrubber_content},
     rendering_controls::{render_controls_ui, render_controls_content},
     performance_monitor::{PerformanceMonitor, render_performance_window, render_performance_content, update_performance_metrics},
+    genome_editor::{render_genome_editor_window, render_genome_editor_content, GenomeGraphState},
+    cell_inspector::{CellInspectorState, render_cell_inspector_window, render_cell_inspector_content},
+    theme_editor::{ThemeEditorState, render_theme_editor_window, render_theme_editor_content},
+    camera_settings::{CameraSettingsState, render_camera_settings_window, render_camera_settings_content},
+    lighting_settings::{LightingSettingsState, render_lighting_settings_window, render_lighting_settings_content},
     edge_resize::{EdgeResizableWindow, EdgeResizeState},
+    main_menu_bar::render_main_menu_bar,
+    imgui_style::{ImguiThemeState, apply_imgui_style},
 };
 use crate::simulation::SimulationState;
+use crate::genome::{CurrentGenome, GenomeNodeGraph};
 use std::time::Instant;
 
 /// Basic scene that renders a simple background color with ImGui UI
@@ -32,6 +40,14 @@ pub struct BasicScene {
     time_scrubber_state: TimeScrubberState,
     performance_monitor: PerformanceMonitor,
     simulation_state: SimulationState,
+    current_genome: CurrentGenome,
+    node_graph: GenomeNodeGraph,
+    graph_state: GenomeGraphState,
+    cell_inspector_state: CellInspectorState,
+    theme_editor_state: ThemeEditorState,
+    camera_settings_state: CameraSettingsState,
+    lighting_settings_state: LightingSettingsState,
+    imgui_theme_state: ImguiThemeState,
     
     // Edge resize states for all windows
     cell_inspector_resize: EdgeResizeState,
@@ -133,6 +149,11 @@ impl BasicScene {
         let time_scrubber_state = TimeScrubberState::default();
         let performance_monitor = PerformanceMonitor::default();
         let simulation_state = SimulationState::default();
+        let current_genome = CurrentGenome::default();
+        let cell_inspector_state = CellInspectorState::default();
+        let theme_editor_state = ThemeEditorState::default();
+        let camera_settings_state = CameraSettingsState::default();
+        let lighting_settings_state = LightingSettingsState::default();
         
         Self {
             surface,
@@ -146,6 +167,14 @@ impl BasicScene {
             time_scrubber_state,
             performance_monitor,
             simulation_state,
+            current_genome,
+            node_graph: GenomeNodeGraph::default(),
+            graph_state: GenomeGraphState::default(),
+            cell_inspector_state,
+            theme_editor_state,
+            camera_settings_state,
+            lighting_settings_state,
+            imgui_theme_state: ImguiThemeState::default(),
             cell_inspector_resize: EdgeResizeState::default(),
             genome_editor_resize: EdgeResizeState::default(),
             camera_settings_resize: EdgeResizeState::default(),
@@ -243,6 +272,12 @@ impl BasicScene {
             // This allows windows to be docked anywhere in the application
             ui.dockspace_over_main_viewport();
             
+            // Apply ImGui theme and styling
+            apply_imgui_style(ui, &mut self.imgui_theme_state, self.global_ui_state.ui_scale);
+            
+            // Render main menu bar at the top
+            render_main_menu_bar(ui, &mut self.global_ui_state, &mut self.simulation_state, &mut self.imgui_theme_state);
+            
             // Render all UI windows inline to avoid borrow checker issues
             // Scene Manager
             if self.global_ui_state.show_scene_manager {
@@ -329,24 +364,13 @@ impl BasicScene {
             // Cell Inspector
             if self.global_ui_state.show_cell_inspector {
                 if self.global_ui_state.windows_locked {
-                    // Use regular window when locked
-                    ui.window("Cell Inspector")
-                        .position([3079.0, 1067.0], imgui::Condition::FirstUseEver)
-                        .size([355.0, 368.0], imgui::Condition::FirstUseEver)
-                        .flags(imgui::WindowFlags::NO_MOVE | imgui::WindowFlags::NO_RESIZE)
-                        .build(|| {
-                            ui.text("Cell Inspector");
-                            ui.separator();
-                            ui.text("No cell selected");
-                            ui.spacing();
-                            ui.text("Select a cell to view its properties:");
-                            ui.bullet_text("Position and velocity");
-                            ui.bullet_text("Mass and radius");
-                            ui.bullet_text("Genome information");
-                            ui.bullet_text("Current mode and state");
-                        });
+                    render_cell_inspector_window(
+                        ui,
+                        &mut self.cell_inspector_state,
+                        &self.current_genome,
+                        &self.global_ui_state,
+                    );
                 } else {
-                    // Use edge-resizable window when unlocked
                     let mut cursor_to_set = None;
                     EdgeResizableWindow::new("Cell Inspector", &mut self.cell_inspector_resize)
                         .size([355.0, 368.0], imgui::Condition::FirstUseEver)
@@ -354,15 +378,7 @@ impl BasicScene {
                         .border_size(6.0)
                         .min_size([200.0, 150.0])
                         .build(ui, |cursor| cursor_to_set = cursor, || {
-                            ui.text("Cell Inspector");
-                            ui.separator();
-                            ui.text("No cell selected");
-                            ui.spacing();
-                            ui.text("Select a cell to view its properties:");
-                            ui.bullet_text("Position and velocity");
-                            ui.bullet_text("Mass and radius");
-                            ui.bullet_text("Genome information");
-                            ui.bullet_text("Current mode and state");
+                            render_cell_inspector_content(ui, &mut self.cell_inspector_state, &self.current_genome);
                         });
                     cursor_requests.push((cursor_to_set, 10));
                 }
@@ -371,24 +387,15 @@ impl BasicScene {
             // Genome Editor
             if self.global_ui_state.show_genome_editor {
                 if self.global_ui_state.windows_locked {
-                    // Use regular window when locked
-                    ui.window("Genome Editor")
-                        .position([4.0, 31.0], imgui::Condition::FirstUseEver)
-                        .size([894.0, 1408.0], imgui::Condition::FirstUseEver)
-                        .flags(imgui::WindowFlags::NO_MOVE | imgui::WindowFlags::NO_RESIZE)
-                        .build(|| {
-                            ui.text("Genome Editor");
-                            ui.separator();
-                            ui.text("Node-based genome editing interface");
-                            ui.spacing();
-                            ui.text("Features:");
-                            ui.bullet_text("Visual node graph");
-                            ui.bullet_text("Mode configuration");
-                            ui.bullet_text("Behavior programming");
-                            ui.bullet_text("Real-time preview");
-                        });
+                    render_genome_editor_window(
+                        ui,
+                        &mut self.current_genome,
+                        &mut self.simulation_state,
+                        &self.global_ui_state,
+                        &mut self.node_graph,
+                        &mut self.graph_state,
+                    );
                 } else {
-                    // Use edge-resizable window when unlocked
                     let mut cursor_to_set = None;
                     EdgeResizableWindow::new("Genome Editor", &mut self.genome_editor_resize)
                         .size([894.0, 1408.0], imgui::Condition::FirstUseEver)
@@ -396,15 +403,7 @@ impl BasicScene {
                         .border_size(6.0)
                         .min_size([400.0, 300.0])
                         .build(ui, |cursor| cursor_to_set = cursor, || {
-                            ui.text("Genome Editor");
-                            ui.separator();
-                            ui.text("Node-based genome editing interface");
-                            ui.spacing();
-                            ui.text("Features:");
-                            ui.bullet_text("Visual node graph");
-                            ui.bullet_text("Mode configuration");
-                            ui.bullet_text("Behavior programming");
-                            ui.bullet_text("Real-time preview");
+                            render_genome_editor_content(ui, &mut self.current_genome, &mut self.simulation_state, &mut self.node_graph, &mut self.graph_state);
                         });
                     cursor_requests.push((cursor_to_set, 10));
                 }
@@ -413,24 +412,12 @@ impl BasicScene {
             // Camera Settings
             if self.global_ui_state.show_camera_settings {
                 if self.global_ui_state.windows_locked {
-                    // Use regular window when locked
-                    ui.window("Camera Settings")
-                        .position([2223.0, 215.0], imgui::Condition::FirstUseEver)
-                        .size([815.0, 613.0], imgui::Condition::FirstUseEver)
-                        .flags(imgui::WindowFlags::NO_MOVE | imgui::WindowFlags::NO_RESIZE)
-                        .build(|| {
-                            ui.text("Camera Settings");
-                            ui.separator();
-                            ui.text("Camera control options");
-                            ui.spacing();
-                            ui.text("Settings:");
-                            ui.bullet_text("Movement speed");
-                            ui.bullet_text("Mouse sensitivity");
-                            ui.bullet_text("Field of view");
-                            ui.bullet_text("Near/far planes");
-                        });
+                    render_camera_settings_window(
+                        ui,
+                        &mut self.camera_settings_state,
+                        &self.global_ui_state,
+                    );
                 } else {
-                    // Use edge-resizable window when unlocked
                     let mut cursor_to_set = None;
                     EdgeResizableWindow::new("Camera Settings", &mut self.camera_settings_resize)
                         .size([815.0, 613.0], imgui::Condition::FirstUseEver)
@@ -438,15 +425,7 @@ impl BasicScene {
                         .border_size(6.0)
                         .min_size([300.0, 200.0])
                         .build(ui, |cursor| cursor_to_set = cursor, || {
-                            ui.text("Camera Settings");
-                            ui.separator();
-                            ui.text("Camera control options");
-                            ui.spacing();
-                            ui.text("Settings:");
-                            ui.bullet_text("Movement speed");
-                            ui.bullet_text("Mouse sensitivity");
-                            ui.bullet_text("Field of view");
-                            ui.bullet_text("Near/far planes");
+                            render_camera_settings_content(ui, &mut self.camera_settings_state);
                         });
                     cursor_requests.push((cursor_to_set, 10));
                 }
@@ -455,24 +434,12 @@ impl BasicScene {
             // Theme Editor
             if self.global_ui_state.show_theme_editor {
                 if self.global_ui_state.windows_locked {
-                    // Use regular window when locked
-                    ui.window("Theme Editor")
-                        .position([994.0, 421.0], imgui::Condition::FirstUseEver)
-                        .size([398.0, 615.0], imgui::Condition::FirstUseEver)
-                        .flags(imgui::WindowFlags::NO_MOVE | imgui::WindowFlags::NO_RESIZE)
-                        .build(|| {
-                            ui.text("Theme Editor");
-                            ui.separator();
-                            ui.text("Customize UI appearance");
-                            ui.spacing();
-                            ui.text("Options:");
-                            ui.bullet_text("Color schemes");
-                            ui.bullet_text("Font settings");
-                            ui.bullet_text("Window styling");
-                            ui.bullet_text("Custom themes");
-                        });
+                    render_theme_editor_window(
+                        ui,
+                        &mut self.theme_editor_state,
+                        &self.global_ui_state,
+                    );
                 } else {
-                    // Use edge-resizable window when unlocked
                     let mut cursor_to_set = None;
                     EdgeResizableWindow::new("Theme Editor", &mut self.theme_editor_resize)
                         .size([398.0, 615.0], imgui::Condition::FirstUseEver)
@@ -480,15 +447,7 @@ impl BasicScene {
                         .border_size(6.0)
                         .min_size([250.0, 200.0])
                         .build(ui, |cursor| cursor_to_set = cursor, || {
-                            ui.text("Theme Editor");
-                            ui.separator();
-                            ui.text("Customize UI appearance");
-                            ui.spacing();
-                            ui.text("Options:");
-                            ui.bullet_text("Color schemes");
-                            ui.bullet_text("Font settings");
-                            ui.bullet_text("Window styling");
-                            ui.bullet_text("Custom themes");
+                            render_theme_editor_content(ui, &mut self.theme_editor_state);
                         });
                     cursor_requests.push((cursor_to_set, 10));
                 }
@@ -497,24 +456,12 @@ impl BasicScene {
             // Lighting Settings
             if self.global_ui_state.show_lighting_settings {
                 if self.global_ui_state.windows_locked {
-                    // Use regular window when locked
-                    ui.window("Lighting Settings")
-                        .position([983.0, 588.0], imgui::Condition::FirstUseEver)
-                        .size([730.0, 556.0], imgui::Condition::FirstUseEver)
-                        .flags(imgui::WindowFlags::NO_MOVE | imgui::WindowFlags::NO_RESIZE)
-                        .build(|| {
-                            ui.text("Lighting Settings");
-                            ui.separator();
-                            ui.text("Scene lighting configuration");
-                            ui.spacing();
-                            ui.text("Controls:");
-                            ui.bullet_text("Ambient lighting");
-                            ui.bullet_text("Directional lights");
-                            ui.bullet_text("Point lights");
-                            ui.bullet_text("Shadow settings");
-                        });
+                    render_lighting_settings_window(
+                        ui,
+                        &mut self.lighting_settings_state,
+                        &self.global_ui_state,
+                    );
                 } else {
-                    // Use edge-resizable window when unlocked
                     let mut cursor_to_set = None;
                     EdgeResizableWindow::new("Lighting Settings", &mut self.lighting_settings_resize)
                         .size([730.0, 556.0], imgui::Condition::FirstUseEver)
@@ -522,15 +469,7 @@ impl BasicScene {
                         .border_size(6.0)
                         .min_size([300.0, 200.0])
                         .build(ui, |cursor| cursor_to_set = cursor, || {
-                            ui.text("Lighting Settings");
-                            ui.separator();
-                            ui.text("Scene lighting configuration");
-                            ui.spacing();
-                            ui.text("Controls:");
-                            ui.bullet_text("Ambient lighting");
-                            ui.bullet_text("Directional lights");
-                            ui.bullet_text("Point lights");
-                            ui.bullet_text("Shadow settings");
+                            render_lighting_settings_content(ui, &mut self.lighting_settings_state);
                         });
                     cursor_requests.push((cursor_to_set, 10));
                 }
